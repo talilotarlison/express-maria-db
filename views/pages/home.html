@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>home</title>
+    <link rel="stylesheet" href="./styles.css"> <!-- Link para o CSS se necessário -->
+</head>
+
+<body>
+    <header>
+        <nav>
+            <ul>
+                <li><a href="/pagina-protegida">Página Protegida</a></li>
+                <li><a href="/cadastro">Página cadasstro</a></li>
+                <li><a href="/logout">Logout</a></li>
+            </ul>
+        </nav>
+    </header>
+
+    <main>
+        <h1>Bem-vindo à home 
+
+            <section id="dados">
+                <h2>Informações Adicionais</h2>
+                <p>Esta página contém informações apenas para usuários autenticados.</p>
+            </section>
+    </main>
+
+    <footer>
+        <p>&copy; 2024 Seu Site</p>
+    </footer>
+</body>
+<script>
+    fetch('http://localhost:3000/dados')
+        .then(dados => dados.json())
+        .then((dados) => {
+            console.log(dados)
+            const dadosTela = document.getElementById("dados")
+            dados.map((dado) => {
+                dadosTela.innerHTML += `<li data-id=${dado.id} onclick()>${dado.tipo, dado.nome} <button onclick="deleteItem(${dado.id})">Click me</button></li>`
+            })
+        })
+
+
+        async function  deleteItem(id) {
+        alert("deseja deletar",id)
+        alert(id)
+        await fetch(`http://localhost:3000/delete/?id=${parseInt(id)}`, {
+            method: 'DELETE',
+        })
+            .then(dados => dados.json())
+            .then(dados => console.log(dados))
+    }
+</script>
+
+</html>
