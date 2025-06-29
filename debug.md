@@ -245,3 +245,104 @@ console.log(status); // "Conectado ao mariadb. Base de dados financeiro"
 
 Você tem alguma dúvida adicional sobre isso?
 
+A consulta que você escreveu **não está totalmente protegida contra SQL Injection**. Isso ocorre porque você está apenas substituindo as variáveis diretamente no `query` usando a interpolação de strings, sem utilizar os **prepared statements** de forma correta.
+
+### O que é SQL Injection?
+
+SQL Injection é um tipo de ataque onde o atacante consegue manipular uma consulta SQL inserindo código malicioso. Se a consulta estiver vulnerável, o atacante pode alterar o comportamento da consulta, acessando ou modificando dados de forma não autorizada.
+
+### Como se proteger contra SQL Injection?
+
+A proteção contra SQL Injection é feita usando **prepared statements**. Em vez de concatenar os dados diretamente na consulta SQL, os dados são passados como parâmetros separados, permitindo que o banco de dados trate os dados de forma segura, evitando qualquer risco de execução de código malicioso.
+
+### Seu Código Atual
+
+Você está fazendo isso:
+
+```javascript
+const query = new ConexaoBancoDados("login").selectBancoUser();
+const results = await conn.query(query, [user.username, user.password]);
+```
+
+No entanto, **o método `selectBancoUser()` não está fazendo o uso de prepared statements**, ele apenas retorna a consulta com a interpolação de strings.
+
+A função `selectBancoUser()` está assim:
+
+```javascript
+selectBancoUser() {
+    const query = `SELECT * FROM ${this.nomeTable} WHERE nome = ? AND senha = ?`;
+    return query;
+}
+```
+
+Aqui, você está usando `?` como placeholders (que é ótimo!), mas ainda está concatenando a tabela diretamente no SQL. Isso significa que **não há risco de SQL Injection nos valores de `nome` e `senha`**, pois você está usando placeholders para esses dados. Porém, o nome da tabela (`this.nomeTable`) ainda está sendo diretamente interpolado na query, o que pode ser um risco se o nome da tabela for malformado ou manipulado.
+
+### Melhorando a Proteção
+
+#### 1. **Evitar interpolação de nome da tabela**:
+
+O maior risco é que você está interpolando diretamente o nome da tabela na string de consulta. Embora não seja tão fácil manipular o nome de uma tabela através de SQL Injection, é uma boa prática evitar essa interpolação e tornar isso mais seguro.
+
+Uma maneira de evitar isso é validar o nome da tabela, certificando-se de que ele seja um valor conhecido e seguro. Não se deve permitir a inserção dinâmica de nomes de tabelas diretamente sem validação. A melhor abordagem seria ter uma lista de tabelas válidas e verificar se o nome da tabela pertence a essa lista.
+
+#### 2. **Revisando o Código com Prepared Statements**
+
+Se o seu banco de dados está usando **MySQL** ou **MariaDB**, você provavelmente está usando uma biblioteca como o `mysql2`, que permite trabalhar com **prepared statements** de forma simples. Aqui está uma maneira segura de fazer isso:
+
+##### Exemplo de código melhorado:
+
+1. **Definindo a consulta SQL**:
+   Vamos garantir que os parâmetros sejam passados separadamente.
+
+```javascript
+class ConexaoBancoDados {
+    nomeTable;
+    constructor(nomeTable) {
+        this.nomeTable = nomeTable;
+    }
+
+    // Consulta com prepared statement (agora protegido contra SQL Injection)
+    selectBancoUser() {
+        const query = `SELECT * FROM ?? WHERE nome = ? AND senha = ?`; // ?? é para nome da tabela e ? para valores
+        return query;
+    }
+}
+```
+
+Aqui, estamos usando `??` para **referência de nome de tabela** e `?` para os **valores dos parâmetros**. No `mysql2`, o `??` é usado para indicar que a interpolação é para um nome de tabela ou coluna, enquanto `?` é usado para valores de parâmetros.
+
+2. **Executando a consulta de forma segura**:
+   Quando você for chamar a consulta, passamos os parâmetros separados:
+
+```javascript
+const query = new ConexaoBancoDados("login").selectBancoUser();
+const results = await conn.query(query, [this.nomeTable, user.username, user.password]);
+```
+
+Aqui, `conn.query()` vai automaticamente tratar os parâmetros passados para evitar que valores maliciosos alterem a consulta. O valor de `this.nomeTable` é um nome de tabela, então é importante validá-lo antes de passar como argumento. Você pode garantir que o nome da tabela seja um valor seguro verificando se ele pertence a um conjunto de tabelas válidas, como mostrado abaixo:
+
+```javascript
+const tabelasValidas = ["login", "fluxocaixa", "clientes"]; // Exemplo de tabelas permitidas
+if (!tabelasValidas.includes(this.nomeTable)) {
+    throw new Error("Tabela inválida!");
+}
+```
+
+### Como o `mysql2` ou qualquer driver de banco de dados protege contra SQL Injection:
+
+* **Placeholders (`?` ou `??`)**: O driver `mysql2` (e outros drivers como `pg` para PostgreSQL, por exemplo) substitui os valores de parâmetros (`?`) de forma segura, evitando a execução de qualquer código malicioso inserido pelo usuário.
+* **Escape de valores**: O driver faz a devida validação dos parâmetros, garantindo que valores como strings, números ou datas sejam escapados corretamente, para evitar qualquer tipo de injeção.
+
+### Conclusão:
+
+1. **Para proteger completamente contra SQL Injection**:
+
+   * **Evite interpolação direta de valores (mesmo para tabelas e colunas)**.
+   * Use **prepared statements** (com `?` ou `??`).
+   * Valide qualquer entrada dinâmica (como o nome da tabela) antes de usá-la.
+
+2. **No seu código**:
+
+   * Você já está usando prepared statements para os valores de entrada (como `user.username` e `user.password`), o que é ótimo. A única parte vulnerável é a interpolação do nome da tabela. Certifique-se de validar e usar um nome de tabela seguro.
+
+Essa abordagem vai garantir que seu código esteja **protegido contra SQL Injection** e que você tenha um controle maior sobre os dados que estão sendo manipulados. Se precisar de mais alguma explicação ou ajuda, estou por aqui!
